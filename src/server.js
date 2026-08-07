@@ -3,6 +3,8 @@ import "dotenv/config";
 import cors from "cors";
 import express from "express";
 
+import gameContext from "./game-context.js";
+
 const app = express();
 const port = Number.parseInt(process.env.PORT ?? "3000", 10);
 const frontendOrigins = (process.env.FRONTEND_ORIGIN ?? "http://localhost:5173")
@@ -12,7 +14,6 @@ const frontendOrigins = (process.env.FRONTEND_ORIGIN ?? "http://localhost:5173")
 const frontendOrigin = frontendOrigins[0];
 const model = process.env.OPENROUTER_MODEL ?? "openrouter/auto";
 const maxMessageLength = 2_000;
-const maxContextLength = 10_000;
 const localDevelopmentOrigin = /^http:\/\/(localhost|127\.0\.0\.1):\d+$/;
 const systemInstructions = `
 You are the Video Forge Studios website chatbot. Answer only from the supplied
@@ -44,8 +45,6 @@ app.get("/api/health", (_request, response) => {
 app.post("/api/chat", async (request, response) => {
   const message =
     typeof request.body?.message === "string" ? request.body.message.trim() : "";
-  const context =
-    typeof request.body?.context === "string" ? request.body.context.trim() : "";
   const history = Array.isArray(request.body?.history)
     ? request.body.history
         .filter(
@@ -71,16 +70,6 @@ app.post("/api/chat", async (request, response) => {
     });
   }
 
-  if (!context) {
-    return response.status(400).json({ error: "context is required" });
-  }
-
-  if (context.length > maxContextLength) {
-    return response.status(400).json({
-      error: `context must be ${maxContextLength} characters or fewer`,
-    });
-  }
-
   if (!process.env.OPENROUTER_API_KEY) {
     return response.status(503).json({ error: "Chat service is not configured" });
   }
@@ -100,7 +89,7 @@ app.post("/api/chat", async (request, response) => {
           model,
           messages: [
             { role: "system", content: systemInstructions },
-            { role: "system", content: `Game context:\n${context}` },
+            { role: "system", content: `Game context:\n${gameContext}` },
             ...history,
             { role: "user", content: message },
           ],

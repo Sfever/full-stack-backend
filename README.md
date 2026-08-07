@@ -15,8 +15,9 @@ The API listens on `http://localhost:3000` by default.
 ## Endpoints
 
 - `GET /api/health`
-- `POST /api/chat` with JSON `{ "message": "What is Lanyards Attack?" }`
+- `POST /api/chat` with JSON `{ "message": "What is Lanyards Attack?", "history": [] }`
 
 The model defaults to OpenRouter's `openrouter/auto` router. Set
-`OPENROUTER_MODEL` in `.env` to use a specific model instead. The frontend sends
-the game context and recent conversation history with each request.
+`OPENROUTER_MODEL` in `.env` to use a specific model instead. Game information is
+managed in `src/game-context.js`; clients only send the current message and
+optional recent conversation history.
