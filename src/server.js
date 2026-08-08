@@ -3,7 +3,9 @@ import "dotenv/config";
 import cors from "cors";
 import express from "express";
 
+import pool, { verifyDatabaseConnection } from "./database.js";
 import gameContext from "./game-context.js";
+import userRouter from "./user-routes.js";
 
 const app = express();
 const port = Number.parseInt(process.env.PORT ?? "3000", 10);
@@ -41,6 +43,8 @@ app.use(express.json({ limit: "16kb" }));
 app.get("/api/health", (_request, response) => {
   response.json({ status: "ok" });
 });
+
+app.use("/api/user", userRouter);
 
 app.post("/api/chat", async (request, response) => {
   const message =
@@ -125,6 +129,15 @@ app.use((error, _request, response, _next) => {
   return response.status(500).json({ error: "Request failed" });
 });
 
-app.listen(port, () => {
-  console.log(`Chatbot backend listening on port ${port}`);
-});
+try {
+  await verifyDatabaseConnection();
+  console.log("Connected to PostgreSQL");
+
+  app.listen(port, () => {
+    console.log(`Chatbot backend listening on port ${port}`);
+  });
+} catch (error) {
+  console.error("Failed to connect to PostgreSQL:", error);
+  await pool.end();
+  process.exitCode = 1;
+}
