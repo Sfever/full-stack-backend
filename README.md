@@ -7,18 +7,28 @@ game-information chatbot. All chatbot logic is kept in `src/server.js`.
 
 1. Copy `.env.example` to `.env`.
 2. Set `DATABASE_URL` to your PostgreSQL connection string.
-3. Set `OPENROUTER_API_KEY` in `.env`.
-4. Run `npm install`.
-5. Run `npm run dev`.
+3. Set `SESSION_SECRET` to at least 32 random bytes.
+4. Set `OPENROUTER_API_KEY` in `.env`.
+5. Run `npm install`.
+6. Run `npm run dev`.
 
 The backend verifies its PostgreSQL connection before listening on
 `http://localhost:3000` by default. Database queries can import the shared pool
 from `src/database.js`.
 
+Login sessions use an HTTP-only cookie and PostgreSQL's `user_sessions` table.
+The table is created automatically while the project has no migration runner.
+Set `TRUST_PROXY=true` only when the backend is behind exactly one trusted
+reverse proxy that terminates HTTPS.
+
 ## Endpoints
 
 - `GET /api/health`
 - `POST /api/chat` with JSON `{ "message": "What is Lanyards Attack?", "history": [] }`
+- `POST /api/auth/login` with JSON
+  `{ "email": "name@example.com", "password": "the account password" }`
+- `GET /api/auth/me` returns the authenticated user's private profile
+- `POST /api/auth/logout` destroys the session and clears its cookie
 
 The model defaults to OpenRouter's `openrouter/auto` router. Set
 `OPENROUTER_MODEL` in `.env` to use a specific model instead. Game information is
@@ -42,8 +52,10 @@ in `credential`, and it is never included in API responses. The `admin` and
 The public info endpoint also omits email and journalist application state until
 authenticated private-profile access is implemented.
 
-Authentication and authorization are not implemented yet. Until Passport session
-support is added, the update and delete endpoints must not be exposed publicly.
+Update and delete require a valid Passport session, and the requested `id` must
+match the authenticated user's ID. Frontend authentication requests made from a
+different origin must set `credentials: "include"` so the browser sends the
+session cookie.
 
 ## Database Schema
 
