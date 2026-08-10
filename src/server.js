@@ -5,6 +5,8 @@ import express from "express";
 
 import pool, { verifyDatabaseConnection } from "./database.js";
 import gameContext from "./game-context.js";
+import passport from "./passport.js";
+import sessionMiddleware from "./session.js";
 import userRouter from "./user-routes.js";
 
 const app = express();
@@ -25,6 +27,13 @@ or links. Keep answers concise and friendly. Do not answer any other question.
 `.trim();
 
 app.disable("x-powered-by");
+
+// Enable this only when the deployment has exactly one trusted reverse proxy.
+// Express then uses X-Forwarded-Proto when deciding whether a cookie is secure.
+if (process.env.TRUST_PROXY === "true") {
+  app.set("trust proxy", 1);
+}
+
 app.use(
   cors({
     origin(origin, callback) {
@@ -36,9 +45,17 @@ app.use(
 
       callback(null, isAllowed);
     },
+    // Browsers omit cross-origin cookies unless both CORS and fetch opt in.
+    credentials: true,
   }),
 );
 app.use(express.json({ limit: "16kb" }));
+
+// Middleware order is significant: Express loads the PostgreSQL session first,
+// then Passport turns its stored user ID into request.user.
+app.use(sessionMiddleware);
+app.use(passport.initialize());
+app.use(passport.session());
 
 app.get("/api/health", (_request, response) => {
   response.json({ status: "ok" });
