@@ -4,6 +4,7 @@ import cors from "cors";
 import express from "express";
 
 import pool, { verifyDatabaseConnection } from "./database.js";
+import authRouter from "./auth-routes.js";
 import gameContext from "./game-context.js";
 import passport from "./passport.js";
 import sessionMiddleware from "./session.js";
@@ -61,6 +62,7 @@ app.get("/api/health", (_request, response) => {
   response.json({ status: "ok" });
 });
 
+app.use("/api/auth", authRouter);
 app.use("/api/user", userRouter);
 
 app.post("/api/chat", async (request, response) => {
