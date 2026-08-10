@@ -1,5 +1,6 @@
 import { Router } from "express";
 
+import { requireAuthentication } from "./auth-middleware.js";
 import pool from "./database.js";
 import { hashPassword } from "./password.js";
 
@@ -199,7 +200,7 @@ router.post("/create", async (request, response, next) => {
   }
 });
 
-router.post("/update", async (request, response, next) => {
+router.post("/update", requireAuthentication, async (request, response, next) => {
   try {
     const body = requireObjectBody(request.body);
     rejectUnsupportedFields(
@@ -208,6 +209,13 @@ router.post("/update", async (request, response, next) => {
     );
 
     const id = validateId(body.id);
+
+    // Self-service routes may only mutate the authenticated account. Administrative
+    // user management belongs in a separate route with an explicit role check.
+    if (id !== request.user.id) {
+      return response.status(403).json({ error: "Cannot update another user" });
+    }
+
     const assignments = [];
     const values = [id];
 
@@ -259,11 +267,16 @@ router.post("/update", async (request, response, next) => {
   }
 });
 
-router.post("/delete", async (request, response, next) => {
+router.post("/delete", requireAuthentication, async (request, response, next) => {
   try {
     const body = requireObjectBody(request.body);
     rejectUnsupportedFields(body, new Set(["id"]));
     const id = validateId(body.id);
+
+    if (id !== request.user.id) {
+      return response.status(403).json({ error: "Cannot delete another user" });
+    }
+
     const result = await pool.query(
       `
         UPDATE users
