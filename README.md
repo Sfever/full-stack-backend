@@ -3,6 +3,9 @@
 Minimal Node/Express and OpenRouter backend for the Video Forge Studios
 game-information chatbot. All chatbot logic is kept in `src/server.js`.
 
+Requires Node.js `^20.19.0`, `^22.12.0`, or `>=23.0.0` so the migration CLI and
+its locked dependencies run on a supported runtime.
+
 ## Setup
 
 1. Copy `.env.example` to `.env`.

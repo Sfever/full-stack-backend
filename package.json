@@ -11,7 +11,7 @@
     "test": "node --check src/*.js && node --test test/*.test.js"
   },
   "engines": {
-    "node": ">=20"
+    "node": "^20.19.0 || ^22.12.0 || >=23.0.0"
   },
   "dependencies": {
     "connect-pg-simple": "^10.0.0",
