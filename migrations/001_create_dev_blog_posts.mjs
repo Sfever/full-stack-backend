@@ -1,5 +1,48 @@
 export function up(pgm) {
   pgm.sql(`
+    -- The users table predates the repository's migration runner. Baseline its
+    -- existing contract here so a fresh database can satisfy blog_posts.author_id.
+    CREATE TABLE IF NOT EXISTS users (
+      id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+      username VARCHAR(100) NOT NULL,
+      email VARCHAR(254) NOT NULL,
+      credential TEXT NOT NULL,
+      journalist BOOLEAN NOT NULL DEFAULT FALSE,
+      admin BOOLEAN NOT NULL DEFAULT FALSE,
+      pending_journalist BOOLEAN NOT NULL DEFAULT FALSE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      deleted_at TIMESTAMPTZ,
+      CONSTRAINT users_single_role CHECK (NOT (admin AND journalist)),
+      CONSTRAINT users_pending_role CHECK (
+        NOT pending_journalist OR (NOT admin AND NOT journalist)
+      )
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS users_active_username_key
+      ON users (LOWER(username))
+      WHERE deleted_at IS NULL;
+
+    CREATE UNIQUE INDEX IF NOT EXISTS users_active_email_key
+      ON users (LOWER(email))
+      WHERE deleted_at IS NULL;
+
+    CREATE OR REPLACE FUNCTION set_users_updated_at()
+    RETURNS TRIGGER
+    LANGUAGE plpgsql
+    AS $function$
+    BEGIN
+      NEW.updated_at = NOW();
+      RETURN NEW;
+    END;
+    $function$;
+
+    DROP TRIGGER IF EXISTS users_set_updated_at ON users;
+    CREATE TRIGGER users_set_updated_at
+      BEFORE UPDATE ON users
+      FOR EACH ROW
+      EXECUTE FUNCTION set_users_updated_at();
+
     CREATE TABLE blog_posts (
       id SERIAL PRIMARY KEY,
       author_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
@@ -39,5 +82,7 @@ export function up(pgm) {
 }
 
 export function down(pgm) {
+  // Users may predate this baseline and can own data outside the blog feature.
+  // Rolling back the blog migration must never remove that shared table.
   pgm.sql("DROP TABLE blog_posts;");
 }
