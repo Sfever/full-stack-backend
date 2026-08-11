@@ -25,9 +25,8 @@ const sessionMiddleware = session({
     pool,
     tableName: "user_sessions",
 
-    // This project does not have a migration runner yet. Letting the store create
-    // its small table keeps local setup reproducible; production can replace this
-    // with an explicit deployment migration once schema permissions are locked down.
+    // Keep the pre-existing session setup automatic for local environments. The
+    // application-owned blog schema is managed separately through migrations.
     createTableIfMissing: true,
   }),
   name: sessionCookieName,

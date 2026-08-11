@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "node --watch src/server.js",
+    "migrate": "node-pg-migrate up --envPath .env --migration-file-language mjs",
+    "migrate:down": "node-pg-migrate down --envPath .env --migration-file-language mjs",
     "start": "node src/server.js",
     "test": "node --check src/*.js && node --test test/*.test.js"
   },
@@ -20,5 +22,8 @@
     "passport": "^0.7.0",
     "passport-local": "^1.0.0",
     "pg": "^8.22.0"
+  },
+  "devDependencies": {
+    "node-pg-migrate": "^9.0.0"
   }
 }
