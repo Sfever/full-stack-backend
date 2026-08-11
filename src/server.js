@@ -5,6 +5,7 @@ import express from "express";
 
 import pool, { verifyDatabaseConnection } from "./database.js";
 import authRouter from "./auth-routes.js";
+import blogRouter from "./blog-routes.js";
 import gameContext from "./game-context.js";
 import passport from "./passport.js";
 import sessionMiddleware from "./session.js";
@@ -50,7 +51,9 @@ app.use(
     credentials: true,
   }),
 );
-app.use(express.json({ limit: "16kb" }));
+// Markdown uploads are transported as JSON strings. Route validators apply the
+// tighter 256 KiB content limit after Express parses the request.
+app.use(express.json({ limit: "300kb" }));
 
 // Middleware order is significant: Express loads the PostgreSQL session first,
 // then Passport turns its stored user ID into request.user.
@@ -64,6 +67,7 @@ app.get("/api/health", (_request, response) => {
 
 app.use("/api/auth", authRouter);
 app.use("/api/user", userRouter);
+app.use("/api/blog", blogRouter);
 
 app.post("/api/chat", async (request, response) => {
   const message =
@@ -140,6 +144,10 @@ app.post("/api/chat", async (request, response) => {
 });
 
 app.use((error, _request, response, _next) => {
+  if (error.type === "entity.too.large") {
+    return response.status(413).json({ error: "Request body is too large" });
+  }
+
   if (error instanceof SyntaxError && error.status === 400) {
     return response.status(400).json({ error: "Request body must be valid JSON" });
   }
