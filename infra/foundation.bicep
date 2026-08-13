@@ -124,7 +124,6 @@ resource privateDnsLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2
   location: 'global'
   properties: {
     registrationEnabled: false
-    resolutionPolicy: 'Default'
     virtualNetwork: {
       id: virtualNetwork.id
     }
