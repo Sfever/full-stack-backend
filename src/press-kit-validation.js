@@ -1,5 +1,6 @@
 const questionMaxLength = 2_000;
 const answerMaxLength = 8_000;
+const postgresIntegerMax = 2_147_483_647;
 
 export class PressKitValidationError extends Error {}
 
@@ -30,7 +31,9 @@ function validateRequiredText(value, field, maxLength) {
     throw new PressKitValidationError(`${field} is required`);
   }
 
-  if (text.length > maxLength) {
+  // PostgreSQL CHAR_LENGTH counts Unicode code points rather than JavaScript's
+  // UTF-16 code units, so use the string iterator to keep both limits aligned.
+  if ([...text].length > maxLength) {
     throw new PressKitValidationError(
       `${field} must be ${maxLength} characters or fewer`,
     );
@@ -66,7 +69,7 @@ export function validateQuestionId(value) {
 
   const id = Number(value);
 
-  if (!Number.isSafeInteger(id)) {
+  if (!Number.isSafeInteger(id) || id > postgresIntegerMax) {
     throw new PressKitValidationError(
       "question ID must be a positive integer",
     );

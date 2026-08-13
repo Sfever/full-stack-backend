@@ -25,12 +25,21 @@ test("press kit validation trims valid questions and answers", () => {
 
 test("press kit text limits match the database constraints", () => {
   assert.throws(() => validateQuestion(" "), PressKitValidationError);
+  assert.equal(validateQuestion("😀".repeat(2_000)), "😀".repeat(2_000));
   assert.throws(
-    () => validateQuestion("q".repeat(2_001)),
+    () => validateQuestion("😀".repeat(2_001)),
     PressKitValidationError,
   );
   assert.throws(
     () => validateAnswer("a".repeat(8_001)),
+    PressKitValidationError,
+  );
+});
+
+test("question IDs stay within the PostgreSQL integer range", () => {
+  assert.equal(validateQuestionId("2147483647"), 2_147_483_647);
+  assert.throws(
+    () => validateQuestionId("2147483648"),
     PressKitValidationError,
   );
 });
