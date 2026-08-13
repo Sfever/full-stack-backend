@@ -29,6 +29,8 @@ reverse proxy that terminates HTTPS.
 ## Endpoints
 
 - `GET /api/health`
+- `GET /api/live` is the process liveness probe
+- `GET /api/ready` verifies PostgreSQL before accepting deployment traffic
 - `POST /api/chat` with JSON `{ "message": "What is Lanyards Attack?", "history": [] }`
 - `POST /api/auth/login` with JSON
   `{ "email": "name@example.com", "password": "the account password" }`
@@ -58,10 +60,22 @@ Passport. Markdown is limited to 256 KiB. Cover images are optional and must use
 a public HTTPS hostname; the backend stores the URL but does not fetch arbitrary
 remote resources.
 
-The model defaults to OpenRouter's `openrouter/auto` router. Set
-`OPENROUTER_MODEL` in `.env` to use a specific model instead. Game information is
+The model defaults to `openai/gpt-5.6-luna` through OpenRouter. Set
+`OPENROUTER_MODEL` in `.env` to use a different model instead. Game information is
 managed in `src/game-context.js`; clients only send the current message and
 optional recent conversation history.
+
+## Production deployment
+
+Production is designed for Azure Container Apps and Azure Database for
+PostgreSQL Flexible Server. The deployment runs only after a commit reaches
+`main`; pull requests into `dev` run CI without creating or updating Azure
+resources. See [`infra/README.md`](infra/README.md) for the one-time Azure and
+GitHub configuration.
+
+Production database URLs must include `sslmode=verify-full`. Schema migrations
+run in a single manual-trigger Container Apps Job before the new API revision is
+deployed. Runtime replicas never create or modify tables.
 
 ### User management endpoints
 Base URL: `/api/user`
