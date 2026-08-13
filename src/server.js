@@ -19,7 +19,7 @@ const frontendOrigins = (process.env.FRONTEND_ORIGIN ?? "http://localhost:5173")
   .map((origin) => origin.trim())
   .filter(Boolean);
 const frontendOrigin = frontendOrigins[0];
-const model = process.env.OPENROUTER_MODEL ?? "openrouter/auto";
+const model = process.env.OPENROUTER_MODEL ?? "openai/gpt-5.6-luna";
 const maxMessageLength = 2_000;
 const localDevelopmentOrigin = /^http:\/\/(localhost|127\.0\.0\.1):\d+$/;
 const systemInstructions = `

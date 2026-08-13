@@ -22,7 +22,7 @@ param sessionSecret string
 @secure()
 param openRouterApiKey string
 
-param openRouterModel string = 'openrouter/auto'
+param openRouterModel string = 'openai/gpt-5.6-luna'
 
 var customDomainInputsMatch = empty(customDomainName) == empty(customDomainCertificateId)
 var customDomains = !customDomainInputsMatch

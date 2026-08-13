@@ -60,8 +60,8 @@ Passport. Markdown is limited to 256 KiB. Cover images are optional and must use
 a public HTTPS hostname; the backend stores the URL but does not fetch arbitrary
 remote resources.
 
-The model defaults to OpenRouter's `openrouter/auto` router. Set
-`OPENROUTER_MODEL` in `.env` to use a specific model instead. Game information is
+The model defaults to `openai/gpt-5.6-luna` through OpenRouter. Set
+`OPENROUTER_MODEL` in `.env` to use a different model instead. Game information is
 managed in `src/game-context.js`; clients only send the current message and
 optional recent conversation history.
 
