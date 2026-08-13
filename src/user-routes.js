@@ -76,13 +76,13 @@ function validatePassword(value) {
   return value;
 }
 
-function validatePendingJournalist(value) {
+function validateJournalist(value) {
   if (value === undefined) {
     return false;
   }
 
   if (typeof value !== "boolean") {
-    throw new RequestValidationError("pendingJournalist must be a boolean");
+    throw new RequestValidationError("journalist must be a boolean");
   }
 
   return value;
@@ -109,7 +109,6 @@ function serializeUser(row) {
     id: row.id,
     username: row.username,
     email: row.email,
-    pendingJournalist: row.pending_journalist,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -173,21 +172,21 @@ router.post("/create", async (request, response, next) => {
     const body = requireObjectBody(request.body);
     rejectUnsupportedFields(
       body,
-      new Set(["username", "email", "password", "pendingJournalist"]),
+      new Set(["username", "email", "password", "journalist"]),
     );
 
     const username = validateUsername(body.username);
     const email = validateEmail(body.email);
     const password = validatePassword(body.password);
-    const pendingJournalist = validatePendingJournalist(body.pendingJournalist);
+    const journalist = validateJournalist(body.journalist);
     const credential = await hashPassword(password);
     const result = await pool.query(
       `
-        INSERT INTO users (username, email, credential, pending_journalist)
+        INSERT INTO users (username, email, credential, journalist)
         VALUES ($1, $2, $3, $4)
-        RETURNING id, username, email, pending_journalist, created_at, updated_at
+        RETURNING id, username, email, created_at, updated_at
       `,
-      [username, email, credential, pendingJournalist],
+      [username, email, credential, journalist],
     );
 
     return response.status(201).json({ user: serializeUser(result.rows[0]) });
@@ -205,7 +204,7 @@ router.post("/update", requireAuthentication, async (request, response, next) =>
     const body = requireObjectBody(request.body);
     rejectUnsupportedFields(
       body,
-      new Set(["id", "username", "email", "password", "pendingJournalist"]),
+      new Set(["id", "username", "email", "password"]),
     );
 
     const id = validateId(body.id);
@@ -234,11 +233,6 @@ router.post("/update", requireAuthentication, async (request, response, next) =>
       assignments.push(`credential = $${values.length}`);
     }
 
-    if (body.pendingJournalist !== undefined) {
-      values.push(validatePendingJournalist(body.pendingJournalist));
-      assignments.push(`pending_journalist = $${values.length}`);
-    }
-
     if (assignments.length === 0) {
       throw new RequestValidationError("At least one field to update is required");
     }
@@ -248,7 +242,7 @@ router.post("/update", requireAuthentication, async (request, response, next) =>
         UPDATE users
         SET ${assignments.join(", ")}
         WHERE id = $1 AND deleted_at IS NULL
-        RETURNING id, username, email, pending_journalist, created_at, updated_at
+        RETURNING id, username, email, created_at, updated_at
       `,
       values,
     );

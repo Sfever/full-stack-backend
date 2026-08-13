@@ -67,18 +67,19 @@ optional recent conversation history.
 Base URL: `/api/user`
 
 - `POST /api/user/create` with JSON
-  `{ "username": "name", "email": "name@example.com", "password": "at least 8 characters", "pendingJournalist": false }`
+  `{ "username": "name", "email": "name@example.com", "password": "at least 8 characters", "journalist": false }`
 - `POST /api/user/update` with JSON containing `id` and one or more of
-  `username`, `email`, `password`, or `pendingJournalist`
+  `username`, `email`, or `password`
 - `POST /api/user/delete` with JSON `{ "id": 1 }`
 - `GET /api/user/info?id=1` returns the public profile fields `id`, `username`,
   `createdAt`, and `updatedAt`
 
 Passwords are salted and hashed by the backend. Only the resulting hash is stored
-in `credential`, and it is never included in API responses. The `admin` and
-`journalist` fields are database-controlled and are rejected by these APIs.
-The public info endpoint also omits email and journalist application state until
-authenticated private-profile access is implemented.
+in `credential`, and it is never included in API responses. `admin` remains
+database-controlled. The `journalist` field is accepted only during registration
+and grants the role immediately; it is not returned in public profile responses.
+The public info endpoint also omits email until authenticated private-profile
+access is implemented.
 
 Update and delete require a valid Passport session, and the requested `id` must
 match the authenticated user's ID. Frontend authentication requests made from a
@@ -90,8 +91,7 @@ session cookie.
 The local `users` table contains:
 
 - `id`, `username`, `email`, and the password hash in `credential`
-- database-controlled `journalist` and `admin` flags
-- the registration-controlled `pending_journalist` flag
+- a registration-controlled `journalist` flag and database-controlled `admin`
 - `created_at`, `updated_at`, and nullable `deleted_at` timestamps
 
 Deleting a user is a soft delete: the API records `deleted_at` instead of

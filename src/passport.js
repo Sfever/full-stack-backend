@@ -64,8 +64,7 @@ passport.deserializeUser(async (id, done) => {
           username,
           email,
           admin,
-          journalist,
-          pending_journalist
+          journalist
         FROM users
         WHERE id = $1
           AND deleted_at IS NULL
@@ -86,7 +85,6 @@ passport.deserializeUser(async (id, done) => {
       email: row.email,
       isAdmin: row.admin,
       isJournalist: row.journalist,
-      isPendingJournalist: row.pending_journalist,
     });
   } catch (error) {
     return done(error);
