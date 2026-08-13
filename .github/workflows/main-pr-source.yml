@@ -1,0 +1,26 @@
+name: Main pull request source policy
+
+on:
+  pull_request_target:
+    branches: [main]
+    types: [opened, reopened, synchronize, ready_for_review, edited]
+
+# This workflow deliberately reads only event metadata. Never check out or run
+# pull request code in a pull_request_target workflow with write permission.
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  close-disallowed-source:
+    if: github.event.pull_request.head.ref != 'dev' || github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Close pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: |
+          gh pr close "$PR_URL" --comment "Pull requests into \`main\` must come from this repository's \`dev\` branch. Please retarget the work to \`dev\`; the release pull request will be opened from \`dev\` to \`main\`."
