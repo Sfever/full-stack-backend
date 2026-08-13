@@ -94,12 +94,14 @@ Configure these environment or repository variables:
 - `AZURE_CLIENT_ID`
 - `AZURE_CONTAINER_APP_NAME`
 - `AZURE_CONTAINER_ENVIRONMENT_NAME`
+- `AZURE_CUSTOM_DOMAIN_CERTIFICATE_ID`
 - `AZURE_MIGRATION_JOB_NAME`
 - `AZURE_REGISTRY_NAME`
 - `AZURE_RESOURCE_GROUP`
 - `AZURE_SUBSCRIPTION_ID`
 - `AZURE_TENANT_ID`
 - `AZURE_WORKLOAD_IDENTITY_NAME`
+- `API_CUSTOM_DOMAIN`
 - `FRONTEND_ORIGIN`
 - `SITE_URL`
 
@@ -123,13 +125,23 @@ the production resource group and AcrPush on the registry. The foundation
 template creates both assignments when `deploymentPrincipalObjectId` is
 provided.
 
+`API_CUSTOM_DOMAIN` and `AZURE_CUSTOM_DOMAIN_CERTIFICATE_ID` are an all-or-none
+pair. They can both remain empty for the first deployment that creates the
+Container App. Immediately after the hostname and certificate are bound, store
+their exact values as GitHub variables. Every later Bicep deployment then owns
+and preserves the binding instead of resetting manually configured ingress
+state.
+
 ## Custom API domain
 
 The initial workflow verifies the default `azurecontainerapps.io` hostname.
-Bind the final `api.<domain>` hostname only after the Container App exists and
-the exact Cloudflare zone is confirmed. Keep the validation DNS record DNS-only
-until Azure issues the managed certificate, then set `VITE_API_URL` on the
-frontend to that HTTPS origin.
+Bind `api.sfever.org` only after the Container App exists. Keep its CNAME and
+validation record DNS-only while Azure issues a managed certificate. Azure
+requires managed-certificate subdomains to remain a direct CNAME to the
+generated Container Apps hostname for renewal, so enabling the Cloudflare proxy
+needs a different certificate strategy and must be a deliberate follow-up.
+After binding, set the two GitHub variables above and set frontend
+`VITE_API_URL` to `https://api.sfever.org`.
 
 ## Database changes
 

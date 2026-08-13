@@ -88,9 +88,11 @@ jobs:
     timeout-minutes: 25
     environment: production
     env:
+      API_CUSTOM_DOMAIN: ${{ vars.API_CUSTOM_DOMAIN }}
       AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
       AZURE_CONTAINER_APP_NAME: ${{ vars.AZURE_CONTAINER_APP_NAME }}
       AZURE_CONTAINER_ENVIRONMENT_NAME: ${{ vars.AZURE_CONTAINER_ENVIRONMENT_NAME }}
+      AZURE_CUSTOM_DOMAIN_CERTIFICATE_ID: ${{ vars.AZURE_CUSTOM_DOMAIN_CERTIFICATE_ID }}
       AZURE_MIGRATION_JOB_NAME: ${{ vars.AZURE_MIGRATION_JOB_NAME }}
       AZURE_REGISTRY_NAME: ${{ vars.AZURE_REGISTRY_NAME }}
       AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
@@ -135,6 +137,12 @@ jobs:
               exit 1
             fi
           done
+
+          if [[ -n "$API_CUSTOM_DOMAIN" && -z "$AZURE_CUSTOM_DOMAIN_CERTIFICATE_ID" ]] || \
+            [[ -z "$API_CUSTOM_DOMAIN" && -n "$AZURE_CUSTOM_DOMAIN_CERTIFICATE_ID" ]]; then
+            echo "::error::API_CUSTOM_DOMAIN and AZURE_CUSTOM_DOMAIN_CERTIFICATE_ID must either both be set or both be empty."
+            exit 1
+          fi
 
       - name: Sign in to Azure with OIDC
         uses: azure/login@v2
@@ -227,6 +235,8 @@ jobs:
               containerAppName="$AZURE_CONTAINER_APP_NAME" \
               containerEnvironmentName="$AZURE_CONTAINER_ENVIRONMENT_NAME" \
               containerImage="$RUNTIME_IMAGE" \
+              customDomainCertificateId="$AZURE_CUSTOM_DOMAIN_CERTIFICATE_ID" \
+              customDomainName="$API_CUSTOM_DOMAIN" \
               databaseUrl="$PRODUCTION_DATABASE_URL" \
               frontendOrigin="$FRONTEND_ORIGIN" \
               openRouterApiKey="$PRODUCTION_OPENROUTER_API_KEY" \

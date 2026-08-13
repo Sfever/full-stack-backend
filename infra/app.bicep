@@ -4,6 +4,8 @@ param location string = resourceGroup().location
 param containerAppName string
 param containerEnvironmentName string
 param containerImage string
+param customDomainCertificateId string = ''
+param customDomainName string = ''
 param frontendOrigin string
 param registryName string
 param revisionSuffix string
@@ -21,6 +23,19 @@ param sessionSecret string
 param openRouterApiKey string
 
 param openRouterModel string = 'openrouter/auto'
+
+var customDomainInputsMatch = empty(customDomainName) == empty(customDomainCertificateId)
+var customDomains = !customDomainInputsMatch
+  ? fail('customDomainName and customDomainCertificateId must either both be set or both be empty.')
+  : empty(customDomainName)
+    ? []
+    : [
+      {
+        bindingType: 'SniEnabled'
+        certificateId: customDomainCertificateId
+        name: customDomainName
+      }
+    ]
 
 @description('Tags applied to the production API.')
 param tags object = {
@@ -56,6 +71,7 @@ resource containerApp 'Microsoft.App/containerApps@2025-01-01' = {
       activeRevisionsMode: 'Single'
       ingress: {
         allowInsecure: false
+        customDomains: customDomains
         external: true
         targetPort: 3000
         transport: 'auto'
