@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   requireAdmin,
   requireAuthentication,
+  requireJournalist,
 } from "../src/auth-middleware.js";
 
 test("authenticated requests continue to protected handlers", () => {
@@ -78,4 +79,44 @@ test("signed-in non-admins receive a JSON 403 response", () => {
 
   assert.equal(statusCode, 403);
   assert.deepEqual(responseBody, { error: "Administrator access required" });
+});
+
+test("database-backed journalists continue to submission handlers", () => {
+  let nextCalled = false;
+  const request = {
+    isAuthenticated: () => true,
+    user: { isJournalist: true },
+  };
+
+  requireJournalist(request, {}, () => {
+    nextCalled = true;
+  });
+
+  assert.equal(nextCalled, true);
+});
+
+test("signed-in non-journalists cannot submit press questions", () => {
+  let statusCode;
+  let responseBody;
+  const request = {
+    isAuthenticated: () => true,
+    user: { isJournalist: false },
+  };
+  const response = {
+    status(value) {
+      statusCode = value;
+      return this;
+    },
+    json(value) {
+      responseBody = value;
+      return this;
+    },
+  };
+
+  requireJournalist(request, response, () => {
+    assert.fail("non-journalist request should not continue");
+  });
+
+  assert.equal(statusCode, 403);
+  assert.deepEqual(responseBody, { error: "Journalist access required" });
 });

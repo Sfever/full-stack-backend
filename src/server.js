@@ -8,6 +8,7 @@ import authRouter from "./auth-routes.js";
 import blogRouter from "./blog-routes.js";
 import gameContext from "./game-context.js";
 import passport from "./passport.js";
+import pressKitRouter from "./press-kit-routes.js";
 import sessionMiddleware from "./session.js";
 import userRouter from "./user-routes.js";
 
@@ -68,6 +69,7 @@ app.get("/api/health", (_request, response) => {
 app.use("/api/auth", authRouter);
 app.use("/api/user", userRouter);
 app.use("/api/blog", blogRouter);
+app.use("/api/press-kit", pressKitRouter);
 
 app.post("/api/chat", async (request, response) => {
   const message =
