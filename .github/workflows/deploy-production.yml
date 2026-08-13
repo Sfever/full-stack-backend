@@ -1,0 +1,268 @@
+name: Deploy backend production
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: backend-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  validate:
+    name: Validate production candidate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/video_forge_test
+      SESSION_SECRET: ci-only-session-secret-with-at-least-32-bytes
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: video_forge_test
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d video_forge_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Test
+        run: npm test
+
+      - name: Apply migrations to a fresh PostgreSQL database
+        run: npm run migrate:ci
+
+      - name: Smoke-test health and database readiness
+        shell: bash
+        run: |
+          npm start >"$RUNNER_TEMP/backend.log" 2>&1 &
+          backend_pid=$!
+          trap 'kill "$backend_pid" 2>/dev/null || true' EXIT
+
+          for attempt in {1..20}; do
+            if curl --fail --silent http://127.0.0.1:3000/api/ready; then
+              exit 0
+            fi
+
+            if ! kill -0 "$backend_pid" 2>/dev/null; then
+              cat "$RUNNER_TEMP/backend.log"
+              exit 1
+            fi
+
+            sleep 1
+          done
+
+          cat "$RUNNER_TEMP/backend.log"
+          exit 1
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+
+  deploy:
+    name: Migrate and deploy to Azure
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment: production
+    env:
+      API_CUSTOM_DOMAIN: ${{ vars.API_CUSTOM_DOMAIN }}
+      AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+      AZURE_CONTAINER_APP_NAME: ${{ vars.AZURE_CONTAINER_APP_NAME }}
+      AZURE_CONTAINER_ENVIRONMENT_NAME: ${{ vars.AZURE_CONTAINER_ENVIRONMENT_NAME }}
+      AZURE_CUSTOM_DOMAIN_CERTIFICATE_ID: ${{ vars.AZURE_CUSTOM_DOMAIN_CERTIFICATE_ID }}
+      AZURE_MIGRATION_JOB_NAME: ${{ vars.AZURE_MIGRATION_JOB_NAME }}
+      AZURE_REGISTRY_NAME: ${{ vars.AZURE_REGISTRY_NAME }}
+      AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+      AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      AZURE_WORKLOAD_IDENTITY_NAME: ${{ vars.AZURE_WORKLOAD_IDENTITY_NAME }}
+      FRONTEND_ORIGIN: ${{ vars.FRONTEND_ORIGIN }}
+      SITE_URL: ${{ vars.SITE_URL }}
+      PRODUCTION_DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+      PRODUCTION_MIGRATION_DATABASE_URL: ${{ secrets.PRODUCTION_MIGRATION_DATABASE_URL }}
+      PRODUCTION_OPENROUTER_API_KEY: ${{ secrets.PRODUCTION_OPENROUTER_API_KEY }}
+      PRODUCTION_SESSION_SECRET: ${{ secrets.PRODUCTION_SESSION_SECRET }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Validate deployment configuration
+        shell: bash
+        run: |
+          required=(
+            AZURE_CLIENT_ID
+            AZURE_CONTAINER_APP_NAME
+            AZURE_CONTAINER_ENVIRONMENT_NAME
+            AZURE_MIGRATION_JOB_NAME
+            AZURE_REGISTRY_NAME
+            AZURE_RESOURCE_GROUP
+            AZURE_SUBSCRIPTION_ID
+            AZURE_TENANT_ID
+            AZURE_WORKLOAD_IDENTITY_NAME
+            FRONTEND_ORIGIN
+            SITE_URL
+            PRODUCTION_DATABASE_URL
+            PRODUCTION_MIGRATION_DATABASE_URL
+            PRODUCTION_OPENROUTER_API_KEY
+            PRODUCTION_SESSION_SECRET
+          )
+
+          for name in "${required[@]}"; do
+            if [[ -z "${!name}" ]]; then
+              echo "::error::$name is not configured in the production environment."
+              exit 1
+            fi
+          done
+
+          if [[ -n "$API_CUSTOM_DOMAIN" && -z "$AZURE_CUSTOM_DOMAIN_CERTIFICATE_ID" ]] || \
+            [[ -z "$API_CUSTOM_DOMAIN" && -n "$AZURE_CUSTOM_DOMAIN_CERTIFICATE_ID" ]]; then
+            echo "::error::API_CUSTOM_DOMAIN and AZURE_CUSTOM_DOMAIN_CERTIFICATE_ID must either both be set or both be empty."
+            exit 1
+          fi
+
+      - name: Sign in to Azure with OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Resolve and authenticate to Azure Container Registry
+        shell: bash
+        run: |
+          registry_server=$(az acr show \
+            --name "$AZURE_REGISTRY_NAME" \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --query loginServer \
+            --output tsv)
+          az acr login --name "$AZURE_REGISTRY_NAME"
+          echo "REGISTRY_SERVER=$registry_server" >>"$GITHUB_ENV"
+
+      - name: Build and push immutable application images
+        shell: bash
+        run: |
+          runtime_image="$REGISTRY_SERVER/video-forge-backend:$GITHUB_SHA"
+          migration_image="$REGISTRY_SERVER/video-forge-migrations:$GITHUB_SHA"
+
+          docker build --target runtime --tag "$runtime_image" .
+          docker build --target migrations --tag "$migration_image" .
+          docker push "$runtime_image"
+          docker push "$migration_image"
+
+          echo "RUNTIME_IMAGE=$runtime_image" >>"$GITHUB_ENV"
+          echo "MIGRATION_IMAGE=$migration_image" >>"$GITHUB_ENV"
+
+      - name: Configure the migration job
+        shell: bash
+        run: |
+          az deployment group create \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --template-file infra/migration-job.bicep \
+            --parameters \
+              containerEnvironmentName="$AZURE_CONTAINER_ENVIRONMENT_NAME" \
+              migrationDatabaseUrl="$PRODUCTION_MIGRATION_DATABASE_URL" \
+              migrationImage="$MIGRATION_IMAGE" \
+              migrationJobName="$AZURE_MIGRATION_JOB_NAME" \
+              registryName="$AZURE_REGISTRY_NAME" \
+              runtimeDatabaseUrl="$PRODUCTION_DATABASE_URL" \
+              workloadIdentityName="$AZURE_WORKLOAD_IDENTITY_NAME" \
+            --output none
+
+      - name: Run pending production migrations once
+        shell: bash
+        run: |
+          execution_name=$(az containerapp job start \
+            --name "$AZURE_MIGRATION_JOB_NAME" \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --query name \
+            --output tsv)
+
+          for attempt in {1..45}; do
+            status=$(az containerapp job execution show \
+              --name "$AZURE_MIGRATION_JOB_NAME" \
+              --resource-group "$AZURE_RESOURCE_GROUP" \
+              --job-execution-name "$execution_name" \
+              --query properties.status \
+              --output tsv)
+
+            case "$status" in
+              Succeeded)
+                exit 0
+                ;;
+              Failed|Stopped)
+                echo "::error::Migration execution $execution_name finished with status $status."
+                exit 1
+                ;;
+            esac
+
+            sleep 10
+          done
+
+          echo "::error::Migration execution $execution_name did not finish within 450 seconds."
+          exit 1
+
+      - name: Deploy the new backend revision
+        shell: bash
+        run: |
+          az deployment group create \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --template-file infra/app.bicep \
+            --parameters \
+              containerAppName="$AZURE_CONTAINER_APP_NAME" \
+              containerEnvironmentName="$AZURE_CONTAINER_ENVIRONMENT_NAME" \
+              containerImage="$RUNTIME_IMAGE" \
+              customDomainCertificateId="$AZURE_CUSTOM_DOMAIN_CERTIFICATE_ID" \
+              customDomainName="$API_CUSTOM_DOMAIN" \
+              databaseUrl="$PRODUCTION_DATABASE_URL" \
+              frontendOrigin="$FRONTEND_ORIGIN" \
+              openRouterApiKey="$PRODUCTION_OPENROUTER_API_KEY" \
+              registryName="$AZURE_REGISTRY_NAME" \
+              revisionSuffix="sha-${GITHUB_SHA::10}" \
+              sessionSecret="$PRODUCTION_SESSION_SECRET" \
+              siteUrl="$SITE_URL" \
+              workloadIdentityName="$AZURE_WORKLOAD_IDENTITY_NAME" \
+            --output none
+
+      - name: Verify production readiness
+        shell: bash
+        run: |
+          backend_host=$(az containerapp show \
+            --name "$AZURE_CONTAINER_APP_NAME" \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --query properties.configuration.ingress.fqdn \
+            --output tsv)
+
+          for attempt in {1..30}; do
+            if curl --fail --silent --show-error "https://$backend_host/api/ready"; then
+              exit 0
+            fi
+
+            sleep 10
+          done
+
+          echo "::error::The production backend did not become ready within 300 seconds."
+          exit 1
