@@ -24,10 +24,9 @@ const sessionMiddleware = session({
   store: new PostgreSQLSessionStore({
     pool,
     tableName: "user_sessions",
-
-    // Keep the pre-existing session setup automatic for local environments. The
-    // application-owned blog schema is managed separately through migrations.
-    createTableIfMissing: true,
+    // Runtime replicas must not perform schema changes. The session table is
+    // baselined by migration 004 alongside the other application tables.
+    createTableIfMissing: false,
   }),
   name: sessionCookieName,
   secret: sessionSecret,

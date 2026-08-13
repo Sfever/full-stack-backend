@@ -66,6 +66,20 @@ app.get("/api/health", (_request, response) => {
   response.json({ status: "ok" });
 });
 
+app.get("/api/live", (_request, response) => {
+  response.json({ status: "ok" });
+});
+
+app.get("/api/ready", async (_request, response) => {
+  try {
+    await verifyDatabaseConnection();
+    return response.json({ status: "ready" });
+  } catch (error) {
+    console.error("Readiness database check failed:", error);
+    return response.status(503).json({ status: "unavailable" });
+  }
+});
+
 app.use("/api/auth", authRouter);
 app.use("/api/user", userRouter);
 app.use("/api/blog", blogRouter);
@@ -158,11 +172,13 @@ app.use((error, _request, response, _next) => {
   return response.status(500).json({ error: "Request failed" });
 });
 
+let server;
+
 try {
   await verifyDatabaseConnection();
   console.log("Connected to PostgreSQL");
 
-  app.listen(port, () => {
+  server = app.listen(port, () => {
     console.log(`Chatbot backend listening on port ${port}`);
   });
 } catch (error) {
@@ -170,3 +186,45 @@ try {
   await pool.end();
   process.exitCode = 1;
 }
+
+let shutdownStarted = false;
+
+async function shutDown(signal) {
+  if (shutdownStarted) {
+    return;
+  }
+
+  shutdownStarted = true;
+  console.log(`Received ${signal}; shutting down`);
+
+  const forceShutdownTimer = setTimeout(() => {
+    console.error("Graceful shutdown timed out");
+    server?.closeAllConnections?.();
+    process.exitCode = 1;
+  }, 10_000);
+  forceShutdownTimer.unref();
+
+  try {
+    if (server) {
+      await new Promise((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+      });
+    }
+
+    await pool.end();
+    console.log("Shutdown complete");
+  } catch (error) {
+    console.error("Graceful shutdown failed:", error);
+    process.exitCode = 1;
+  } finally {
+    clearTimeout(forceShutdownTimer);
+  }
+}
+
+process.once("SIGTERM", () => {
+  void shutDown("SIGTERM");
+});
+
+process.once("SIGINT", () => {
+  void shutDown("SIGINT");
+});
