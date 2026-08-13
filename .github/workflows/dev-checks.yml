@@ -1,11 +1,11 @@
-name: Main checks
+name: Dev checks
 
 on:
   pull_request:
-    branches: [main]
+    branches: [dev]
 
 concurrency:
-  group: backend-main-${{ github.event.pull_request.number || github.sha }}
+  group: backend-dev-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: true
 
 permissions:
@@ -36,12 +36,6 @@ jobs:
           --health-retries 10
 
     steps:
-      - name: Require dev as the pull request source
-        if: github.event_name == 'pull_request' && (github.head_ref != 'dev' || github.event.pull_request.head.repo.full_name != github.repository)
-        run: |
-          echo "::error::Pull requests into main must come from this repository's dev branch."
-          exit 1
-
       - name: Check out repository
         uses: actions/checkout@v6
 
