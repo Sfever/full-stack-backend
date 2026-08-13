@@ -124,6 +124,8 @@ resource privateDnsLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2
   location: 'global'
   properties: {
     registrationEnabled: false
+    // PostgreSQL VNet-integration zones reject the Private Link-only
+    // resolutionPolicy property, including its otherwise valid Default value.
     virtualNetwork: {
       id: virtualNetwork.id
     }
